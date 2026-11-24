@@ -42,7 +42,7 @@ section{padding:90px 20px;max-width:1120px;margin:auto}.section-head{text-align:
 <details style="max-width:900px;margin:0 auto 40px;padding:0 20px;color:#8e805f;font-size:11px;line-height:1.6">
 <summary style="cursor:pointer;color:#c9a45a;letter-spacing:.15em">SUPABASE SETUP · ADMIN AUTH · PRIVATE WISH DATABASE</summary>
 <pre style="white-space:pre-wrap;overflow-wrap:anywhere;background:#111;padding:15px;border:1px solid #80632f">
--- Run in Supabase SQL Editor.
+-- Run in Supabase SQL Editor. Safe to re-run: existing policies are dropped and recreated.
 create table if not exists public.admin_users (
   user_id uuid primary key references auth.users(id) on delete cascade
 );
@@ -74,19 +74,27 @@ create or replace function public.is_birthday_admin()
 returns boolean language sql stable security definer set search_path=public
 as $$ select exists(select 1 from public.admin_users where user_id=auth.uid()) $$;
 
+drop policy if exists "admin can verify own role" on public.admin_users;
 create policy "admin can verify own role" on public.admin_users for select to authenticated
 using (user_id = auth.uid());
+drop policy if exists "visitors can submit wishes" on public.private_wishes;
 create policy "visitors can submit wishes" on public.private_wishes for insert to anon, authenticated
 with check (char_length(wish_text) between 1 and 1000);
+drop policy if exists "only admin reads wishes" on public.private_wishes;
 create policy "only admin reads wishes" on public.private_wishes for select to authenticated
 using (public.is_birthday_admin());
+drop policy if exists "public reads birthday date" on public.birthday_settings;
 create policy "public reads birthday date" on public.birthday_settings for select to anon, authenticated using (true);
+drop policy if exists "admin inserts birthday date" on public.birthday_settings;
 create policy "admin inserts birthday date" on public.birthday_settings for insert to authenticated
 with check (public.is_birthday_admin());
+drop policy if exists "admin updates birthday date" on public.birthday_settings;
 create policy "admin updates birthday date" on public.birthday_settings for update to authenticated
 using (public.is_birthday_admin()) with check (public.is_birthday_admin());
+drop policy if exists "visitors record visit" on public.visitor_events;
 create policy "visitors record visit" on public.visitor_events for insert to anon, authenticated
 with check (page = 'birthday');
+drop policy if exists "admin reads visitor stats" on public.visitor_events;
 create policy "admin reads visitor stats" on public.visitor_events for select to authenticated
 using (public.is_birthday_admin());
 
@@ -103,14 +111,16 @@ using (public.is_birthday_admin());
 <div id="admin"><div class="admin-box glass"><div class="admin-head"><h2>Control Room</h2><button class="pill" id="closeAdmin">CLOSE ✕</button></div>
 <div id="loginPanel"><p class="eyebrow">Private access</p><p style="color:#b8a987;font-size:12px">Sign in with the administrator account created in Supabase Authentication.</p><input class="field" id="adminEmail" type="email" placeholder="Admin email">
 <input class="field" id="adminPassword" type="password" placeholder="Supabase admin password"><button class="gold-btn" id="loginBtn">UNLOCK CONTROL ROOM</button><div class="status" id="adminStatus"></div></div>
-<div id="dashboard" class="hidden"><p class="eyebrow">Administrator mode</p><div class="admin-grid"><input class="field" id="birthdayDate" type="datetime-local"><input class="field" id="newMessage" placeholder="New floating message"></div><div class="admin-actions"><button class="gold-btn" id="saveDate">SAVE BIRTHDAY DATE</button><button class="pill" id="startTimer">START COUNTDOWN</button><button class="pill" id="pauseTimer">PAUSE COUNTDOWN</button><button class="pill" id="resetTimer">RESET COUNTDOWN</button><button class="pill" id="testFireworks">TEST FIREWORKS</button><button class="pill" id="testVoice">TEST VOICE</button><button class="pill" id="testMusic">TEST MUSIC</button><button class="pill" id="testCake">TEST CAKE CUT</button><button class="pill" id="preview">PREVIEW REVEAL</button><button class="pill" id="addMessage">ADD MESSAGE</button><button class="pill" id="refreshWishes">VIEW LOCAL WISHES</button><button class="pill" id="logoutBtn">LOCK CONTROL ROOM</button></div><p class="eyebrow">Private wishes · this browser only</p><div id="adminWishes" class="wish-list"></div><p class="eyebrow">Visitor statistics</p><div id="stats" class="wish-item">Local visits: <span id="visitCount">1</span></div><div class="status" id="dashStatus"></div></div>
+<div id="dashboard" class="hidden"><p class="eyebrow">Administrator mode</p><div class="admin-grid"><input class="field" id="birthdayDate" type="datetime-local"><input class="field" id="newMessage" placeholder="New floating message"></div><div class="admin-actions"><button class="gold-btn" id="saveDate">SAVE BIRTHDAY DATE</button><button class="pill" id="startTimer">START COUNTDOWN</button><button class="pill" id="pauseTimer">PAUSE COUNTDOWN</button><button class="pill" id="resetTimer">RESET COUNTDOWN</button><button class="pill" id="testFireworks">TEST FIREWORKS</button><button class="pill" id="testVoice">TEST VOICE</button><button class="pill" id="testMusic">TEST MUSIC</button><button class="pill" id="testCake">TEST CAKE CUT</button><button class="pill" id="preview">PREVIEW REVEAL</button><button class="pill" id="addMessage">ADD MESSAGE</button><button class="pill" id="refreshWishes">VIEW PRIVATE WISHES</button><button class="pill" id="logoutBtn">LOCK CONTROL ROOM</button></div><p class="eyebrow">Private wishes · stored in Supabase · admin only</p><div id="adminWishes" class="wish-list"></div><p class="eyebrow">Visitor statistics</p><div id="stats" class="wish-item">Local visits: <span id="visitCount">1</span></div><div class="status" id="dashStatus"></div></div>
 <p style="color:#82765e;font-size:10px;line-height:1.6;margin-top:24px">Supabase setup is required. Keep Row Level Security enabled. Public visitors can submit wishes, but only accounts listed in admin_users can read them. Never expose a service_role key.</p>
 </div></div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-/* SUPABASE CONFIGURATION: replace these with your project's URL and anon/publishable key.
+/* SUPABASE CONFIGURATION
+   Project URL is corrected for this project's anon key.
+   The anon key is intended for browser use with RLS enabled.
    Never put a service_role/secret key in this public HTML file. */
-const SUPABASE_URL = "https://yxveykecgjppqujfxesgh.supabase.co";
+const SUPABASE_URL = "https://yxveykecgjpqujfxesgh.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4dmV5a2VjZ2pwcXVqZnhlc2doIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MzE5OTcsImV4cCI6MjExMTAwNzk5N30.ztCRDZySI4IAteyW7nr6RFeuAsqVKVKoGjuEq8Klcu4";
 const supabaseReady = SUPABASE_URL.startsWith("https://") && !SUPABASE_URL.includes("YOUR_") && SUPABASE_ANON_KEY.length > 20 && !!window.supabase;
 const sb = supabaseReady ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
@@ -143,9 +153,9 @@ function cut(){if($('celebration').classList.contains('hidden'))return;$('cake')
 $('cutCake').onclick=()=>{clickSound();cut()};let dragX=null;$('cake').addEventListener('pointerdown',e=>dragX=e.clientX);$('cake').addEventListener('pointerup',e=>{if(dragX!==null&&Math.abs(e.clientX-dragX)>35)cut();dragX=null});
 function openLetter(){if($('celebration').classList.contains('hidden'))return;$('letter').classList.remove('hidden');$('envelope').style.transform='translateY(-8px) rotateX(12deg)';clickSound()}$('envelope').onclick=openLetter;$('envelope').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openLetter()}};
 $('wishForm').onsubmit=async e=>{e.preventDefault();let name=$('wishName').value.trim()||'Anonymous',wish=$('wishText').value.trim();if(!wish)return;if(!sb){$('wishStatus').textContent='Supabase is not configured yet. Your wish has NOT been sent or stored.';return}$('wishStatus').textContent='Sending securely…';let{error}=await sb.from('private_wishes').insert({visitor_name:name,wish_text:wish});if(error){$('wishStatus').textContent='Could not submit: '+error.message;return}$('wishName').value='';$('wishText').value='';$('wishStatus').textContent='Your wish has been sent privately. Thank you!'};
-function adminOpen(){$('admin').classList.add('show');$('adminStatus').textContent='';$('adminPassword').value='';$('loginPanel').classList.remove('hidden');$('dashboard').classList.add('hidden');if(!sb)$('adminStatus').textContent='Add your Supabase project URL and anon key in the file, then run the SQL setup.'}
+function adminOpen(){$('admin').classList.add('show');$('adminStatus').textContent='';$('adminPassword').value='';$('loginPanel').classList.remove('hidden');$('dashboard').classList.add('hidden');if(!sb)$('adminStatus').textContent='Supabase did not initialize. Check your internet connection and confirm the Supabase script and project settings are available.'}
 $('adminSymbol').onclick=adminOpen;addEventListener('keydown',e=>{if(e.ctrlKey&&e.shiftKey&&e.key.toLowerCase()==='l')adminOpen();if(e.key==='Escape')$('admin').classList.remove('show')});$('closeAdmin').onclick=()=>$('admin').classList.remove('show');
-$('loginBtn').onclick=async()=>{if(!sb){$('adminStatus').textContent='Supabase is not configured.';return}let{data,error}=await sb.auth.signInWithPassword({email:$('adminEmail').value.trim(),password:$('adminPassword').value});if(error){$('adminStatus').textContent='Sign-in failed: '+error.message;return}let{data:role,error:roleError}=await sb.from('admin_users').select('user_id').eq('user_id',data.user.id).maybeSingle();if(roleError||!role){await sb.auth.signOut();$('adminStatus').textContent='This account is not authorized as an administrator.';return}adminUser=data.user;showDashboard()};
+$('loginBtn').onclick=async()=>{if(!sb){$('adminStatus').textContent='Supabase is not connected. Check the project URL, anon key, and internet connection.';return}let{data,error}=await sb.auth.signInWithPassword({email:$('adminEmail').value.trim(),password:$('adminPassword').value});if(error){$('adminStatus').textContent='Sign-in failed: '+error.message;return}let{data:role,error:roleError}=await sb.from('admin_users').select('user_id').eq('user_id',data.user.id).maybeSingle();if(roleError||!role){await sb.auth.signOut();$('adminStatus').textContent='This account is not authorized as an administrator.';return}adminUser=data.user;showDashboard()};
 async function showDashboard(){if(!sb||!adminUser)return;$('loginPanel').classList.add('hidden');$('dashboard').classList.remove('hidden');let{data:setting}=await sb.from('birthday_settings').select('birthday_at').eq('id',1).maybeSingle();if(setting?.birthday_at){target=new Date(setting.birthday_at).getTime();updateCountdown();let dt=new Date(target);$('birthdayDate').value=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16)}else{let dt=new Date(target);$('birthdayDate').value=new Date(dt.getTime()-dt.getTimezoneOffset()*60000).toISOString().slice(0,16)}refreshWishes()};
 $('logoutBtn').onclick=async()=>{if(sb)await sb.auth.signOut();adminUser=null;$('dashboard').classList.add('hidden');$('loginPanel').classList.remove('hidden');$('adminPassword').value=''};
 $('saveDate').onclick=async()=>{let v=$('birthdayDate').value;if(!v||!sb)return;let iso=new Date(v).toISOString();let{error}=await sb.from('birthday_settings').upsert({id:1,birthday_at:iso},{onConflict:'id'});if(error){$('dashStatus').textContent=error.message;return}target=new Date(iso).getTime();paused=false;unlocked=false;$('celebration').classList.add('hidden');$('lockedNote').classList.remove('hidden');$('dashStatus').textContent='Birthday date saved to Supabase.';updateCountdown()};
